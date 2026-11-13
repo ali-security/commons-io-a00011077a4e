@@ -33,9 +33,29 @@ matrix:
     - jdk: openjdk-ea
       env: JACOCO_SKIP=true
 
+# Apache RAT is a licence-header gate, not a test; skip it in both the default
+# install phase and the script phase (as the GitHub workflow does).
+env:
+  global:
+    - MAVEN_OPTS="-Drat.skip=true"
+
+# Travis' focal image no longer ships bellsoft-java14 (apt: "Unable to locate
+# package"), leaving JAVA_HOME pointing at a missing directory; provision the
+# AdoptOpenJDK 14.0.2 build for that leg instead.
+before_install:
+  - |
+    if [ "$TRAVIS_JDK_VERSION" = "openjdk14" ]; then
+      curl -sSL -o /tmp/jdk14.tar.gz "https://github.com/AdoptOpenJDK/openjdk14-binaries/releases/download/jdk-14.0.2%2B12/OpenJDK14U-jdk_x64_linux_hotspot_14.0.2_12.tar.gz"
+      mkdir -p /tmp/jdk14 && tar -xzf /tmp/jdk14.tar.gz -C /tmp/jdk14 --strip-components=1
+      export JAVA_HOME=/tmp/jdk14
+      export PATH="$JAVA_HOME/bin:$PATH"
+    fi
+  - java -version
+
 # --no-transfer-progress requires Maven 3.6.1+. Otherwise use --batch-mode
 script:
   - mvn -V --no-transfer-progress
 
-after_success:
-  - mvn -V --no-transfer-progress clean cobertura:cobertura coveralls:report -Ptravis-cobertura
+# Surefire prints only per-class skip counts; list each skipped test and its reason.
+after_script:
+  - bash .github/list-skipped-tests.sh
